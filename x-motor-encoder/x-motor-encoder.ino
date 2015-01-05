@@ -3,7 +3,7 @@
  *
  * Pinout:
  *
- * M2 -> DC Motor control (Adafruit Motor Shield v1)
+ * M1 -> DC Motor control (Adafruit Motor Shield v1)
  * P19 -> Optical encoder input A
  * P15 -> Optical encoder input B
  */
@@ -16,10 +16,10 @@
 
 #define AXIS_OVERSHOOT	10
 
-const int adaMotor = 2;
-const int pinEncoderA = 19;
-const int pinEncoderB = 15;
-const int pinStopMax = 22;
+const int adaMotor = 3;
+const int pinEncoderA = 18;
+const int pinEncoderB = 29;
+const int pinStopMin = 33;
 
 int pwmMinimum = 98;
 const int pwmMaximum = 255;
@@ -42,14 +42,14 @@ void setup() {
 	motorM1 = &imotorM1;
 	pinMode(pinEncoderA, INPUT_PULLUP);
 	pinMode(pinEncoderB, INPUT_PULLUP);
-	pinMode(pinStopMax, INPUT_PULLUP);
+	pinMode(pinStopMin, INPUT_PULLUP);
 	Serial.begin(9600);
 
 	/* Get a direction */
 	Serial.print("Homing: ");
 	motorMode = HOMING;
 	motorM1->setSpeed(255);
-	motorM1->run(FORWARD);
+	motorM1->run(BACKWARD);
 }
 
 int pos = -1;
@@ -115,35 +115,33 @@ void loop() {
 	int direction;
 
 	if (motorMode == HOMING) {
-		if (digitalRead(pinStopMax) == 0) {
+		Serial.print("Position: ");Serial.println(posMotorNow);
+		if (digitalRead(pinStopMin) == 1) {
 			int speed = pwmMinimum;
+			Serial.print("<ENDSTOP: Min>");
 			/* Back off the endstop */
 			delayMicroseconds(1000);
 			motorM1->run(RELEASE);
 			motorM1->setSpeed(pwmMinimum);
-			motorM1->run(BACKWARD);
-			while (digitalRead(pinStopMax) == 0) {
+			motorM1->run(FORWARD);
+			while (digitalRead(pinStopMin) == 1) {
 				if (speed < pwmMaximum)
 					speed++;
 				motorM1->setSpeed(speed);
 				delayMicroseconds(10000);
 			}
+			Serial.print("<ENDSTOP: !Min>");
 			motorM1->setSpeed(0);
 			motorM1->run(RELEASE);
-			encMotor.write(MAX_POS);
+			encMotor.write(MIN_POS);
 			motorMode = IDLE;
-			Serial.println(MAX_POS);
+			Serial.println(MIN_POS);
 		}
 		return;
 	}
 	
 	if (motorMode == IDLE) {
 		readNextPosition();
-		return;
-	}
-
-	if (digitalRead(pinStopMax) == 0) {
-		motorMode = IDLE;
 		return;
 	}
 
@@ -154,6 +152,12 @@ void loop() {
 	} else {
 		direction = BACKWARD;
 		distance = -distance;
+	}
+
+	if (distance < 0 && digitalRead(pinStopMin) == 1) {
+		motorMode = IDLE;
+		posMotorFuture = posMotorNow;
+		return;
 	}
 
 	if (distance == 0) {
