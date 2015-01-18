@@ -18,7 +18,7 @@
 
 const int adaMotor = 4;
 const int pinEncoderA = 19;
-const int pinEncoderB = 27;
+const int pinEncoderB = 29;
 
 int pwmMinimum = 98;
 const int pwmMaximum = 200;
@@ -47,6 +47,10 @@ void setup() {
 	pinMode(pinEncoderB, INPUT_PULLUP);
 	Serial.begin(9600);
 
+	motorMode = IDLE;
+}
+
+void home() {
 	/* Get a direction */
 	Serial.print("Homing: ");
 	motorMode = HOMING;
@@ -55,12 +59,25 @@ void setup() {
 	posMotorNow = encMotor.read() + 10;
 }
 
+extern "C" {
+	bool stop_motor(int32_t pos, void *priv)
+	{
+		AF_DCMotor *m = (AF_DCMotor *)priv;
+		m->run(BRAKE);
+		return false;
+	}
+};
+
 int pos = -1;
 int neg = 0;
 
 void readNextPosition() {
 	while (Serial.available()) {
 		int c = Serial.read();
+		if (c == 'h') {
+			home();
+			return;
+		}
 		if (c == '\r' || c == '\n') {
 			if (pos >= 0) {
 				/* Go there */
@@ -71,6 +88,7 @@ void readNextPosition() {
 					pos = MIN_POS;
 				Serial.print("\r\nDest: "); Serial.print(pos); Serial.print("\r\n");
 				posMotorFuture = pos;
+				encMotor.at(posMotorFuture - posMotorNow, posMotorFuture, stop_motor, motorM1);
 				posOvershoot = AXIS_OVERSHOOT;
 				motorMode = MOVING;
 			}
@@ -123,9 +141,10 @@ void loop() {
 
 		if (lastms < ms) {
 			if (encMotor.read() == posMotorNow) {
-				encMotor.write(0);
 				motorM1->setSpeed(0);
 				motorM1->run(RELEASE);
+				delay(100);
+				encMotor.write(-100);
 				motorMode = IDLE;
 				Serial.println("Done");
 			}
