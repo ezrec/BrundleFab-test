@@ -18,8 +18,8 @@
 
 const int adaMotor = 3;
 const int pinEncoderA = 18;
-const int pinEncoderB = 29;
-const int pinStopMin = 33;
+const int pinEncoderB = 27;
+const int pinStopMin = 35;
 
 int pwmMinimum = 98;
 const int pwmMaximum = 255;
@@ -45,11 +45,7 @@ void setup() {
 	pinMode(pinStopMin, INPUT_PULLUP);
 	Serial.begin(9600);
 
-	/* Get a direction */
-	Serial.print("Homing: ");
-	motorMode = HOMING;
-	motorM1->setSpeed(255);
-	motorM1->run(BACKWARD);
+	motorMode = IDLE;
 }
 
 int pos = -1;
@@ -58,9 +54,22 @@ long posMotorNow = 0;
 long posMotorFuture = 0;
 int posOvershoot;
 
+void home()
+{
+	/* Get a direction */
+	Serial.print("Homing: ");
+	motorMode = HOMING;
+	motorM1->setSpeed(255);
+	motorM1->run(BACKWARD);
+}
+
 void readNextPosition() {
 	while (Serial.available()) {
 		int c = Serial.read();
+		if (c == 'h') {
+			home();
+			return;
+		}
 		if (c == '\r' || c == '\n') {
 			if (pos >= 0) {
 				/* Go there */
